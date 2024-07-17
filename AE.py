@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from utils import PointNet, SAPP
 from pytorch3d.loss import chamfer_distance
 
+
 class Encoder(nn.Module):
     def __init__(self, args):
         super(Encoder, self).__init__()
@@ -26,6 +27,7 @@ class Encoder(nn.Module):
         feature = self.pn(torch.cat((xyz, feature), dim=1))
         feature = self.output_layer(feature)
         return feature
+
 
 class Decoder(nn.Module):
     def __init__(self, args):
@@ -73,6 +75,7 @@ class Decoder(nn.Module):
         new_xyz = new_xyz.transpose(2, 1)
         return new_xyz
 
+
 class STEQuantize(torch.autograd.Function):
     """Straight-Through Estimator for Quantization.
     Forward pass implements quantization by rounding to integers,
@@ -87,6 +90,7 @@ class STEQuantize(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_outputs):
         return grad_outputs
+
 
 class ConditionalProbabilityModel(nn.Module):
     def __init__(self, L, d):
@@ -112,6 +116,7 @@ class ConditionalProbabilityModel(nn.Module):
         pmf = F.softmax(output, dim=3)
         return pmf
 
+
 class get_model(nn.Module):
     def __init__(self, args=None):
         super(get_model, self).__init__()
@@ -130,6 +135,7 @@ class get_model(nn.Module):
         quantizated_feature = self.quantize(latent)
         new_xyz = self.decoder(quantizated_feature)
         return new_xyz, quantizated_feature
+
 
 class get_loss(nn.Module):
     def __init__(self):
