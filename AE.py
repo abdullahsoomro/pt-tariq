@@ -4,16 +4,19 @@ import torch.nn.functional as F
 from utils import PointNet, SAPP
 from pytorch3d.loss import chamfer_distance
 
-
 class Encoder(nn.Module):
     def __init__(self, args):
         super(Encoder, self).__init__()
-        self.sa = SAPP(in_channel=3, feature_region=8, mlp=[64, 64, 128, 128], norm=False, sample_rate=1, res=False)
-        self.pn = PointNet(in_channel=3 + 128, mlp=[128, 128, 64, 64], norm=False, res=False)
+        self.sa = SAPP(in_channel=3, feature_region=8, mlp=[64, 64, 128, 128], norm=False, sample_rate=1, res=True)
+        self.pn = PointNet(in_channel=3 + 128, mlp=[128, 128, 128, 128], norm=False, res=True)
         self.output_layer = nn.Sequential(
-            nn.Linear(64, 64),
+            nn.Linear(128, 128),
             nn.ReLU(),
-            nn.Linear(64, args.d),
+            nn.Dropout(0.2),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, args.d),
         )
 
     def forward(self, xyz):
@@ -24,7 +27,6 @@ class Encoder(nn.Module):
         feature = self.output_layer(feature)
         return feature
 
-
 class Decoder(nn.Module):
     def __init__(self, args):
         super(Decoder, self).__init__()
@@ -33,17 +35,29 @@ class Decoder(nn.Module):
         self.MLP_layers = nn.Sequential(
             nn.Linear(self.d, 256),
             nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(256, 512),
             nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(512, self.patch_point_num * 32),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.Dropout(0.2),
         )
         self.local_coord_predict = nn.Sequential(
             nn.Conv2d(self.d + 32, 128, 1),
-            nn.InstanceNorm2d(128),
+            nn.GroupNorm(num_groups=4, num_channels=128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, 1),
+            nn.GroupNorm(num_groups=4, num_channels=128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, 1),
+            nn.GroupNorm(num_groups=4, num_channels=128),
             nn.ReLU(inplace=True),
             nn.Conv2d(128, 64, 1),
-            nn.InstanceNorm2d(64),
+            nn.GroupNorm(num_groups=4, num_channels=64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, 1),
+            nn.GroupNorm(num_groups=4, num_channels=64),
             nn.ReLU(inplace=True),
             nn.Conv2d(64, 3, 1)
         )
@@ -59,7 +73,6 @@ class Decoder(nn.Module):
         new_xyz = new_xyz.transpose(2, 1)
         return new_xyz
 
-
 class STEQuantize(torch.autograd.Function):
     """Straight-Through Estimator for Quantization.
     Forward pass implements quantization by rounding to integers,
@@ -74,7 +87,6 @@ class STEQuantize(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_outputs):
         return grad_outputs
-
 
 class ConditionalProbabilityModel(nn.Module):
     def __init__(self, L, d):
@@ -100,7 +112,6 @@ class ConditionalProbabilityModel(nn.Module):
         pmf = F.softmax(output, dim=3)
         return pmf
 
-
 class get_model(nn.Module):
     def __init__(self, args=None):
         super(get_model, self).__init__()
@@ -120,7 +131,6 @@ class get_model(nn.Module):
         new_xyz = self.decoder(quantizated_feature)
         return new_xyz, quantizated_feature
 
-
 class get_loss(nn.Module):
     def __init__(self):
         super(get_loss, self).__init__()
@@ -130,4 +140,3 @@ class get_loss(nn.Module):
         d, _ = chamfer_distance(pc_pred, pc_target)
         loss_pc = d + lambda_ * bpp
         return loss_pc
-   
