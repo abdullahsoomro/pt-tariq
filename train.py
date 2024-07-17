@@ -92,7 +92,6 @@ if __name__ == '__main__':
     total_points = 0
     total_d1_psnr = 0
     total_d2_psnr = 0
-
     for step, (batch_x, total_point_num, sample_point) in enumerate(loader):
         B = np.shape(batch_x)[0]
         P = np.shape(batch_x)[1]
